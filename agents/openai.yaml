@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lung Spatial Mesenchyme Annotation"
+  short_description: "Resolve airway and vascular mesenchymal cells"
+  default_prompt: "Annotate airway versus vascular smooth muscle and adventitial fibroblast populations in this lung spatial dataset, with confidence and evidence."
