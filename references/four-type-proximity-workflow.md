@@ -22,6 +22,26 @@ Require:
 
 Audit factor names, coordinate units, sample labels, target reference counts, image dimensions, and registration before classifying. Compute anchors and abundance thresholds separately within each sample so condition-wide abundance shifts do not define the labels.
 
+## Choose and lock the candidate universe
+
+Record the candidate-universe rule in the output metadata before calculating final labels.
+
+### Original dominant target pool
+
+Use this mode when the user asks to re-annotate the original ASMC, VSMC, and AF2 annotations.
+
+1. For every observation, find the maximum abundance factor across the complete reference panel.
+2. Define the SMC pool as observations whose dominant factor is ASMC or VSMC.
+3. Define the AF2 pool as observations whose dominant factor is AF2.
+4. Do not recruit observations dominated by epithelial, endothelial, immune, AF1, SCMF, pericyte, or other factors, even when they are spatially adjacent to a landmark.
+5. Preserve the original continuous ASMC, VSMC, and AF2 abundances for audit.
+
+Do not obtain the original label by taking the maximum only among ASMC, VSMC, and AF2; that would force every observation into the target universe. When the H5AD contains abundance factors but no discrete label, describe this dominant-factor rule explicitly.
+
+### Expression-qualified pool
+
+Use this alternate mode when broader recovery of SMC or fibroblast candidates is requested. Construct the pools with positive lineage modules and exclusion modules as described in the marker framework. Keep unresolved labels unless complete redistribution is explicitly requested. Do not present this broader pool as equivalent to the original dominant annotations.
+
 ## Landmark anchors
 
 Build two independent anatomical landmark sets:
@@ -58,6 +78,13 @@ For user-requested complete redistribution:
 
 Report how many unresolved SMCs moved to each subtype. Keep the two landmark distances so borderline assignments remain auditable.
 
+For complete re-annotation of an original dominant SMC pool, assign only locked ASMC/VSMC candidates. Combine relative airway-versus-vascular proximity with the original ASMC-versus-VSMC abundance evidence. A tested VisiumHD starting score is:
+
+- `ASMC_score = 0.70 * exp(-d_airway / 60 um) + 0.30 * ASMC / (ASMC + VSMC)`
+- `VSMC_score = 0.70 * exp(-d_vascular / 60 um) + 0.30 * VSMC / (ASMC + VSMC)`
+
+Assign the larger score, retaining the raw scores and distances. Treat the 70/30 weighting and 60 um scale as dataset-specific starting values; verify them on WT histology and sensitivity-test them before reuse. Check per sample and overall that original ASMC plus VSMC equals final ASMC plus VSMC.
+
 ## AF2 classification
 
 Lock an AF2 pool before anatomical subdivision. Require both fibroblast-lineage qualification and AF2 enrichment. The VisiumHD implementation used the top 10% AF2 abundance within each sample as an exploratory threshold.
@@ -80,6 +107,15 @@ Verify and report:
 
 Do not add AF1 or SCMF to the AF2 pool. Analyze AF1 and SCMF separately; SCMF may represent a contractile/remodeling state and can be unreliable when its reference population is small.
 
+In original dominant target-pool mode, the locked AF2 pool is already defined and no additional AF2 abundance quantile is applied. Split every original AF2 observation using the finalized SMC layers:
+
+- airway composite: `sqrt(d_airway_epithelium^2 + d_ASMC^2)`;
+- vascular composite: `sqrt(d_vascular_endothelium^2 + d_VSMC^2)`;
+- smaller airway composite -> `AF2_A`;
+- smaller vascular composite -> `AF2_V`.
+
+This subdivision must satisfy `original_AF2 == final_AF2_A + final_AF2_V` per sample and overall.
+
 ## Validation and outputs
 
 Generate both an H&E overlay and a clean spatial plot with non-target cells in light grey. Visually check:
@@ -92,11 +128,13 @@ Generate both an H&E overlay and a clean spatial plot with non-target cells in l
 Return:
 
 - final per-cell label;
-- original label and whether redistribution occurred;
+- original dominant label, candidate-universe rule, and whether the subtype changed;
 - abundance values and thresholds;
 - airway, vascular, ASMC, and VSMC distances;
 - sample-wise counts before and after redistribution;
 - H&E and grey-background spatial plots;
 - an explicit limitations statement for mixed segmentation, weak reference classes, remodeling, and broad endothelial signals.
+
+For original-pool mode, also return a conservation audit and a side-by-side spatial plot showing the same target universe before and after subdivision. Non-target observations should remain light grey. If a comparison shows a changed SMC or AF2 total, stop and resolve the pool definition before interpreting subtype biology.
 
 Proximity is an anatomical constraint, not proof of cell identity. When expression and H&E topology disagree, lower confidence and preserve the evidence rather than hiding the discrepancy.
